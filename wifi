@@ -1,0 +1,45 @@
+#!/bin/sh
+password_file="$HOME/.wifi_passwords"
+if [ ! -e "$password_file" ]; then
+    touch "$password_file"
+fi
+
+connect_wifi() {
+	if nmcli radio wifi | grep -q "enabled"; then
+		dmenu_output="$(echo "$(nmcli --fields "SSID, RATE, BARS" dev wifi list | tail -n +2)" | dmenu -p "Wifi SSID:")" 
+		SSID=$(echo "$dmenu_output" | cut -d " " -f1)
+		if grep -q "^$SSID" "$password_file"; then
+			PASSWORD=$(grep "^$SSID" "$password_file" | cut -d "|" -f2)
+		else
+			PASSWORD=$(echo "" | dmenu -p "password: ")
+		fi
+		output=$(nmcli dev wifi connect $SSID password $PASSWORD)
+		if [ $? -eq 0 ]; then
+			notify-send "connected to:" "$SSID"
+			
+			if ! grep -q "^$SSID" "$password_file"; then
+				echo "$SSID|$PASSWORD" >> $password_file
+			fi
+		else
+			notify-send "connection failed"		
+		fi
+	else
+		notify-send "Wifi is disabled" "turn it on first"
+	fi
+}
+
+toggle_wifi() {
+	if nmcli radio wifi | grep -q "enabled"; then
+		nmcli radio wifi off
+    	else
+		nmcli radio wifi on
+    	fi
+
+	notify-send "Wifi Status:" "$(nmcli radio wifi)"
+}
+STATUS="$(nmcli radio wifi)"
+chosen="$(echo -e "Connect to Wifi\nToggle Wifi: $STATUS" | dmenu | cut -d ' ' -f1)"
+case "$chosen" in
+        "Connect") connect_wifi ;;
+	"Toggle") toggle_wifi ;;
+esac
